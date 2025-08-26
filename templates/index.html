@@ -1,147 +1,178 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>SyncAI Chatbot</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      background: #f4f7fa;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-    }
-    .chat-container {
-      width: 420px;
-      background: rgb(239, 237, 237);
-      border-radius: 12px;
-      box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-      display: flex;
-      flex-direction: column;
-      overflow: hidden;
-    }
-    .chat-header {
-      background: #269faf;
-      color: white;
-      padding: 15px;
-      font-size: 18px;
-      font-weight: bold;
-      text-align: center;
-    }
-    #chatbox {
-      flex: 1;
-      padding: 15px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .message {
-      max-width: 70%;
-      padding: 10px 14px;
-      border-radius: 18px;
-      font-size: 14px;
-      line-height: 1.4;
-      word-wrap: break-word;
-    }
-    .user {
-      background: #269faf;
-      color: white;
-      align-self: flex-end;
-      border-bottom-right-radius: 4px;
-    }
-    .bot {
-      background: #e9ecef;
-      color: black;
-      align-self: flex-start;
-      border-bottom-left-radius: 4px;
-    }
-    .chat-input {
-      display: flex;
-      border-top: 1px solid #ddd;
-    }
-    .chat-input input {
-      flex: 1;
-      border: none;
-      padding: 12px;
-      font-size: 14px;
-      outline: none;
-    }
-    .chat-input button {
-      background: #269faf;
-      color: white;
-      border: none;
-      padding: 12px 18px;
-      cursor: pointer;
-      font-weight: bold;
-    }
-    .typing {
-      font-style: italic;
-      color: gray;
-      font-size: 13px;
-      margin-left: 5px;
-    }
-  </style>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>{{ bot_name }} – Chat</title>
+<style>
+  :root {
+    --brand: #2e7d32;      /* header + buttons */
+    --bot-bg: #eef6ff;     /* bot bubble */
+    --user-bg: #e6f4ea;    /* user bubble */
+    --text: #1a1a1a;
+    --muted: #6b7280;
+    --shadow: 0 8px 24px rgba(0,0,0,0.12);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #f5f7fb; color: var(--text);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+    display: grid; place-items: center; min-height: 100vh; padding: 16px;
+  }
+  .chat {
+    width: min(760px, 92vw); max-height: 88vh; background: #fff; border-radius: 16px;
+    box-shadow: var(--shadow); display: grid; grid-template-rows: auto 1fr auto;
+    overflow: hidden;
+  }
+  .chat__header {
+    background: var(--brand); color: #fff; padding: 14px 16px; display: flex; align-items: center; gap: 12px;
+  }
+  .avatar {
+    width: 36px; height: 36px; border-radius: 999px; display: grid; place-items: center;
+    background: #fff2; font-size: 20px;
+  }
+  .chat__title { font-weight: 700; }
+  .status { font-size: 12px; opacity: .9; }
+  .chat__body {
+    padding: 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 12px;
+    background: linear-gradient(#fafcff, #f6f7fb);
+  }
+  .msg { max-width: 70%; padding: 10px 14px; border-radius: 16px; line-height: 1.35; white-space: pre-line; }
+  .msg--bot { background: var(--bot-bg); align-self: flex-start; border-bottom-left-radius: 6px; display: flex; gap: 10px; }
+  .msg--user { background: var(--user-bg); align-self: flex-end; border-bottom-right-radius: 6px; }
+  .msg .bubble { display: block; }
+  .quick {
+    display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;
+  }
+  .quick button {
+    border: none; background: var(--brand); color: #fff; padding: 8px 12px; border-radius: 999px;
+    cursor: pointer; font-size: 14px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+  }
+  .typing { color: var(--muted); font-style: italic; }
+  .chat__input {
+    border-top: 1px solid #e5e7eb; padding: 10px; display: grid; grid-template-columns: 1fr auto; gap: 8px;
+    background: #fff;
+  }
+  .chat__input input {
+    border: 1px solid #d1d5db; border-radius: 12px; padding: 12px 14px; font-size: 14px; outline: none;
+  }
+  .chat__input button {
+    background: var(--brand); color: #fff; border: none; border-radius: 12px; padding: 12px 16px; font-weight: 700; cursor: pointer;
+  }
+  .assistant-tag {
+    display: inline-flex; align-items: center; gap: 8px; margin-bottom: 2px; color: var(--muted); font-size: 13px;
+  }
+  .bot-mini-avatar { width: 20px; height: 20px; border-radius: 999px; display: grid; place-items: center; background: #dbeafe; font-size: 14px; }
+</style>
 </head>
 <body>
-  <div class="chat-container">
-    <div class="chat-header">SyncAI Assistant</div>
-    <div id="chatbox"></div>
-    <div class="chat-input">
-      <input id="userInput" type="text" placeholder="Type a message...">
-      <button onclick="sendMessage()">Send</button>
+  <div class="chat">
+    <div class="chat__header">
+      <div class="avatar">👵</div>
+      <div>
+        <div class="chat__title">{{ bot_name }}</div>
+        <div class="status">• Online</div>
+      </div>
+    </div>
+
+    <div id="chatBody" class="chat__body"></div>
+
+    <div class="chat__input">
+      <input id="userInput" type="text" placeholder="Type a message or tap a quick reply…" />
+      <button id="sendBtn">Send</button>
     </div>
   </div>
 
-  <script>
-    const chatBox = document.getElementById("chatbox");
-    const userInput = document.getElementById("userInput");
+<script>
+  const chatBody  = document.getElementById("chatBody");
+  const userInput = document.getElementById("userInput");
+  const sendBtn   = document.getElementById("sendBtn");
 
-    function appendMessage(message, sender) {
-      const msgDiv = document.createElement("div");
-      msgDiv.classList.add("message", sender);
-      msgDiv.innerText = message;
-      chatBox.appendChild(msgDiv);
-      chatBox.scrollTop = chatBox.scrollHeight;
+  function scrollToEnd(){ chatBody.scrollTop = chatBody.scrollHeight; }
+
+  function addBotMessage(text, options=[]) {
+    const wrap = document.createElement("div");
+    wrap.className = "msg msg--bot";
+    wrap.innerHTML = `
+      <div class="avatar">👵</div>
+      <div>
+      <div class="assistant-tag">Mitra</div>
+        <span class="bubble">${escapeHtml(text)}</span>
+        ${options.length ? `<div class="quick"></div>` : ``}
+      </div>
+    `;
+    chatBody.appendChild(wrap);
+
+    // Add quick reply buttons
+    if (options.length) {
+      const q = wrap.querySelector(".quick");
+      options.forEach(opt => {
+        const b = document.createElement("button");
+        b.textContent = opt;
+        b.onclick = () => sendOption(opt);
+        q.appendChild(b);
+      });
     }
+    scrollToEnd();
+  }
 
-    async function sendMessage() {
-      const message = userInput.value.trim();
-      if (!message) return;
-      appendMessage(message, "user");
-      userInput.value = "";
+  function addUserMessage(text) {
+    const wrap = document.createElement("div");
+    wrap.className = "msg msg--user";
+    wrap.innerHTML = `<span class="bubble">${escapeHtml(text)}</span>`;
+    chatBody.appendChild(wrap);
+    scrollToEnd();
+  }
 
-      // Typing animation
-      const typingDiv = document.createElement("div");
-      typingDiv.classList.add("message", "bot", "typing");
-      typingDiv.innerText = "Bot is typing...";
-      chatBox.appendChild(typingDiv);
-      chatBox.scrollTop = chatBox.scrollHeight;
+  function addTyping() {
+    const t = document.createElement("div");
+    t.className = "msg msg--bot typing";
+    t.innerHTML = `<div class="avatar">👵</div><span class="bubble">Mitra is typing…</span>`;
+    chatBody.appendChild(t);
+    scrollToEnd();
+    return t;
+  }
 
-      try {
-        const response = await fetch("/chat", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: message })
-        });
-
-        const data = await response.json();
-
-        // Remove typing animation
-        typingDiv.remove();
-
-        appendMessage(data.reply, "bot");
-      } catch (err) {
-        typingDiv.remove();
-        appendMessage("Error: Could not connect to server.", "bot");
-      }
-    }
-
-    // Allow pressing Enter
-    userInput.addEventListener("keypress", function (e) {
-      if (e.key === "Enter") sendMessage();
+  async function postMessage(message) {
+    const res = await fetch("/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message })
     });
-  </script>
+    return res.json();
+  }
+
+  async function send(message) {
+    if (!message) return;
+    addUserMessage(message);
+    userInput.value = "";
+
+    const typing = addTyping();
+    const data = await postMessage(message);
+    typing.remove();
+
+    addBotMessage(data.reply || "…", data.options || []);
+  }
+
+  function sendOption(opt) { send(opt); }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));
+  }
+
+  // Send on button click / Enter
+  sendBtn.onclick = () => send(userInput.value.trim());
+  userInput.addEventListener("keydown", e => {
+    if (e.key === "Enter") send(userInput.value.trim());
+  });
+
+  // Auto-greet
+  (async function start(){
+    const typing = addTyping();
+    const data = await postMessage("__start__");
+    typing.remove();
+    addBotMessage(data.reply || "Hello!", data.options || []);
+  })();
+</script>
 </body>
 </html>
