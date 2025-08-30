@@ -80,7 +80,10 @@ def menu_response(text):
     return {"reply": text, "options": MENU_OPTIONS}
 
 def start_menu():
-    return menu_response(f"Hello! I’m {BOT_NAME} . How can I help you today?")
+    # Always collect basic details at the start of a chat
+    session["onboard"] = {"index": 0, "data": {}}
+    session.pop("profile", None)
+    return {"reply": ONBOARDING_QUESTIONS[0]["q"], "options": []}
 
 def detect_intent(message):
     m = message.lower()
@@ -94,21 +97,21 @@ def detect_intent(message):
 
 def handle_intent(intent):
     if intent == "About Us":
-        return menu_response(ABOUT_TEXT)
+        return {"reply": ABOUT_TEXT, "options": []}
     if intent == "Our Services":
-        return menu_response(SERVICES_TEXT)
+        return {"reply": SERVICES_TEXT, "options": []}
     if intent == "Pricing / Plans":
-        return menu_response(PRICING_TEXT)
+        return {"reply": PRICING_TEXT, "options": []}
     if intent == "Talk to Support":
-        return menu_response(CONTACT_TEXT)
+        return {"reply": CONTACT_TEXT, "options": []}
     if intent == "FAQs":
-        return menu_response(FAQ_TEXT)
+        return {"reply": FAQ_TEXT, "options": []}
     if intent == "Exit":
         return {"reply": "Thanks for chatting with Mitra 🙏 Take care!", "options": []}
     if intent == "Start Your Journey":
         session["flow"] = {"name": START_FLOW_NAME, "stage": "confirm", "index": 0, "answers": []}
         return {"reply": "I have 7 simple questions to get you started. Shall we begin?", "options": ["Start now", "Maybe later"]}
-    return menu_response("Sorry, I didn’t understand. Pick an option below or ask about services, pricing, contact, or FAQs.")
+    return {"reply": "Sorry, I didn’t understand. You can ask about services, pricing, contact, or FAQs.", "options": []}
 
 def in_flow():
     f = session.get("flow")
@@ -166,6 +169,75 @@ def flow_reply(user_msg):
     # Fallback
     return menu_response("Please choose one of the options to continue.")
 
+# ----- Simple onboarding: collect name, phone, email (once per session) -----
+ONBOARDING_QUESTIONS = [
+    {"key": "name", "q": "Hi there! Before we begin, may I know your name?"},
+    {"key": "phone", "q": "Thanks! Could you share your contact number?"},
+    {"key": "email", "q": "And your email address?"}
+]
+
+def is_valid_phone(s: str) -> bool:
+    import re
+    s = s.strip()
+    # Accept digits, spaces, dashes, leading +
+    return bool(re.fullmatch(r"\+?[0-9][0-9\s\-]{6,14}[0-9]", s))
+
+
+def is_valid_email(s: str) -> bool:
+    import re
+    s = s.strip()
+    return bool(re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", s))
+
+
+def in_onboarding():
+    return session.get("onboard")
+
+
+def onboarding_reply(user_msg: str):
+    o = session.get("onboard")
+    if not o:
+        return None
+
+    idx = o.get("index", 0)
+    data = o.setdefault("data", {})
+
+    # Step 0: name (any non-empty)
+    if idx == 0:
+        name = user_msg.strip()
+        if not name:
+            return {"reply": ONBOARDING_QUESTIONS[0]["q"], "options": []}
+        data["name"] = name
+        o["index"] = 1
+        session["onboard"] = o
+        return {"reply": ONBOARDING_QUESTIONS[1]["q"], "options": []}
+
+    # Step 1: phone (basic validation)
+    if idx == 1:
+        phone = user_msg.strip()
+        if not is_valid_phone(phone):
+            return {"reply": "Please enter a valid contact number (digits, +, -, spaces).", "options": []}
+        data["phone"] = phone
+        o["index"] = 2
+        session["onboard"] = o
+        return {"reply": ONBOARDING_QUESTIONS[2]["q"], "options": []}
+
+    # Step 2: email (basic validation), then finish
+    if idx == 2:
+        email = user_msg.strip()
+        if not is_valid_email(email):
+            return {"reply": "That email doesn’t look right. Please enter a valid email (e.g., name@example.com).", "options": []}
+        data["email"] = email
+        # Save profile and clear onboarding
+        session["profile"] = data
+        session.pop("onboard", None)
+        name = data.get("name") or "there"
+        return menu_response(f"Thanks, {name}! You’re all set. How can I help you today?")
+
+    # Fallback: reset onboarding
+    session.pop("onboard", None)
+    return menu_response("All set. How can I help you today?")
+
+
 @app.route("/")
 def home():
     # pass name so the header can show Telugu + emoji nicely
@@ -175,7 +247,11 @@ def home():
 def chat():
     user_msg = (request.json.get("message") or "").strip()
 
-    # Flow first (if active, it takes priority)
+    # Onboarding first (if active)
+    if in_onboarding():
+        return jsonify(onboarding_reply(user_msg))
+
+    # Flow next (if active)
     f = in_flow()
     if f:
         return jsonify(flow_reply(user_msg))
